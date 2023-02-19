@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"html/template"
@@ -27,29 +26,21 @@ const (
 )
 
 type CommandLineFlags struct {
-	CertFile     *string
-	KeyFile      *string
 	Hostname     *string
 	TemplatesDir *string
 	StaticDir    *string
 	TestTimeout  *time.Duration
 	MaxTests     *int
-	NotifyName   *string
-	NotifyLink   *string
 	LogFile      *string
 }
 
 func NewCommandLineFlags() *CommandLineFlags {
 	c := &CommandLineFlags{
-		CertFile:     flag.String("cert", "tls.crt", "Path to certificate public key file"),
-		KeyFile:      flag.String("key", "tls.key", "Path to certificate private key file"),
 		Hostname:     flag.String("host", "", "Host name of this instance (including TLD)"),
 		TemplatesDir: flag.String("templates", "./templates", "Directory containing the Go template files"),
 		StaticDir:    flag.String("static", "./static", "Directory containing statically-served files"),
 		TestTimeout:  flag.Duration("test_timeout", time.Minute*15, "Maximum time tests will be kept"),
 		MaxTests:     flag.Int("max_tests", 30, "Maximum number of concurrent tests"),
-		NotifyName:   flag.String("notify_name", "", "Name of who to notify"),
-		NotifyLink:   flag.String("notify_link", "", "Contact link to who to notify"),
 		LogFile:      flag.String("logfile", "log.txt", "Log file to be able to audit spam & abuse"),
 	}
 	flag.Parse()
@@ -60,15 +51,6 @@ func NewCommandLineFlags() *CommandLineFlags {
 }
 
 func (c *CommandLineFlags) validate() error {
-	if len(*c.CertFile) == 0 {
-		return fmt.Errorf("cert file invalid: %s", *c.CertFile)
-	} else if len(*c.KeyFile) == 0 {
-		return fmt.Errorf("key file invalid: %s", *c.KeyFile)
-	} else if len(*c.NotifyName) == 0 {
-		return fmt.Errorf("notify_name must be provided")
-	} else if len(*c.NotifyLink) == 0 {
-		return fmt.Errorf("notify_link must be provided")
-	}
 	return nil
 }
 
@@ -100,23 +82,8 @@ func main() {
 	c := NewCommandLineFlags()
 	rand.Seed(time.Now().Unix())
 
-	tlsConfig := &tls.Config{
-		MinVersion:               tls.VersionTLS12,
-		CurvePreferences:         []tls.CurveID{tls.CurveP256, tls.X25519},
-		PreferServerCipherSuites: true,
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		},
-	}
 	httpsServer := &http.Server{
-		Addr:         ":https",
-		TLSConfig:    tlsConfig,
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+		Addr: ":8000",
 	}
 
 	homeTmpl, err := c.homeTemplate()
@@ -135,7 +102,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_ = server.NewWebServer(homeTmpl, aboutTmpl, newTestTmpl, testStatusTmpl, httpsServer, *c.Hostname, *c.TestTimeout, *c.MaxTests, *c.NotifyName, *c.NotifyLink, *c.StaticDir, *c.LogFile)
+	_ = server.NewWebServer(homeTmpl, aboutTmpl, newTestTmpl, testStatusTmpl, httpsServer, *c.Hostname, *c.TestTimeout, *c.MaxTests, *c.StaticDir, *c.LogFile)
 
 	redir := &http.Server{
 		Addr:         ":http",
@@ -162,7 +129,7 @@ func main() {
 			log.Printf("HTTP redirect server ListenAndServe: %v", err)
 		}
 	}()
-	if err := httpsServer.ListenAndServeTLS(*c.CertFile, *c.KeyFile); err != nil {
+	if err := httpsServer.ListenAndServe(); err != nil {
 		panic(err)
 	}
 }

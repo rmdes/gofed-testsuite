@@ -53,13 +53,10 @@ func NewWebServer(home *template.Template,
 	hostname string,
 	testTimeout time.Duration,
 	maxTests int,
-	notifyName, notifyLink string,
 	staticDir string,
 	logFile string) *WebServer {
 	ws := &WebServer{
 		hostname:   hostname,
-		notifyName: notifyName,
-		notifyLink: notifyLink,
 		logFile:    logFile,
 		home:       home,
 		about:      about,
